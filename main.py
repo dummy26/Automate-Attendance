@@ -1,6 +1,7 @@
 import os
 from openpyxl import Workbook, load_workbook
 from datetime import datetime, timedelta
+import re
 
 todays_date = datetime.now().date()
 TODAYS_DATE = todays_date.strftime("%Y-%m-%d")
@@ -112,11 +113,15 @@ def intToascii(x):
 
 
 def printEndMesaage(roll_nos, date):
-    print(f"{len(roll_nos)} students present on {date}")
+    print("\nFile Saved")
+    print(f"{len(roll_nos)} students present on {date}\n")
 
 
 def cleanup():
     for file in os.listdir(XL_FILE_BASE_PATH):
+        if file.startswith("~$"):
+            continue
+
         if file == "temp.xlsx":
             os.remove(os.path.join(XL_FILE_BASE_PATH, file))
             continue
@@ -138,20 +143,21 @@ def getDaysPresent(new_column_int, row, sheet):
     return days_present
 
 
-def findRollNumbersFromFile(file_path):
+def getPresentRollNumbersFromFile(file_path):
     roll_nos = []
 
     with open(file_path) as f:
         for line in f:
             for word in line.split():
                 if "ue193" in word.lower():
-                    if word not in roll_nos:
-                        roll_nos.append(word[:8])
+                    roll_no = "UE" + re.findall("\d+", word)[0]
+                    if roll_no not in roll_nos:
+                        roll_nos.append(roll_no)
     return roll_nos
 
 
-def updateSheet(previous_sheet, txt_file, date):
-    present_roll_nos = findRollNumbersFromFile(txt_file)
+def saveNewSheet(previous_sheet, txt_file, date):
+    present_roll_nos = getPresentRollNumbersFromFile(txt_file)
 
     workbook = load_workbook(filename=previous_sheet)
     sheet = workbook.active
@@ -169,11 +175,15 @@ def updateSheet(previous_sheet, txt_file, date):
                 sheet[f"{DAYS_PRESENT_COLUMN}{row}"] = getDaysPresent(
                     new_column_int, row, sheet
                 )
+    try:
+        file_name = os.path.join(XL_FILE_BASE_PATH, f"{TODAYS_DATE}.xlsx")
+        workbook.save(filename=file_name)
 
-    workbook.save(filename=os.path.join(XL_FILE_BASE_PATH, f"{TODAYS_DATE}.xlsx"))
+        cleanup()
+        printEndMesaage(present_roll_nos, date)
 
-    cleanup()
-    printEndMesaage(present_roll_nos, date)
+    except PermissionError:
+        print(f"\nPlease close the file '{file_name}' and then run program again\n")
 
 
 def run(previous_sheet):
@@ -183,7 +193,7 @@ def run(previous_sheet):
             if "ada" in folder.lower():
                 folder_path = os.path.join(TXT_FILE_BASE_PATH, folder)
                 txt_file = os.path.join(folder_path, os.listdir(folder_path)[0])
-                updateSheet(previous_sheet, txt_file, date)
+                saveNewSheet(previous_sheet, txt_file, date)
                 break
 
 
